@@ -7,7 +7,14 @@ const prisma = new PrismaClient();
 async function main() {
   await prisma.product.upsert({
     where: { slug: "guizhou-fengtang-plum" },
-    update: {},
+    update: {
+      name: "仁寿吴家祠蜂糖李",
+      subtitle: "单果精选 · 新鲜采摘 · 泡沫网兜护果包装",
+      description: "高山昼夜温差，攒足阳光与甜。树上自然成熟，果肉细嫩离核。",
+      image: "/images/fengtang-plum-hero.png",
+      featured: true,
+      active: true,
+    },
     create: {
       id: "seed-product-plum",
       slug: "guizhou-fengtang-plum",
