@@ -1,6 +1,6 @@
 export const featuredProduct = {
   slug: "guizhou-fengtang-plum",
-  name: "贵州蜂糖李",
+  name: "仁寿吴家祠蜂糖李",
   subtitle: "单果精选 · 新鲜采摘 · 泡沫网兜护果包装",
   description: "高山昼夜温差，攒足阳光与甜。树上自然成熟，果肉细嫩离核。",
   image: "/images/fengtang-plum-hero.png",
