@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 import { useCart } from "@/components/cart-provider";
 import { formatMoney } from "@/lib/money";
 import { mainlandProvinces } from "@/lib/provinces";
+import { resolvePaymentChannel } from "@/lib/payment-channel";
 
 export default function CheckoutPage() {
   const { lines, totalFen, clear } = useCart();
@@ -21,14 +22,12 @@ export default function CheckoutPage() {
       const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: lines.map(({ variantId, quantity }) => ({ variantId, quantity })), address: Object.fromEntries(data) }) });
       const order = await response.json();
       if (!response.ok) throw new Error(order.error ?? "创建订单失败");
-      const mobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-      const wechat = /MicroMessenger/i.test(navigator.userAgent);
-      const channel = provider === "wechat" ? (wechat ? "jsapi" : mobile ? "h5" : "native") : mobile ? "wap" : "page";
+      const channel = resolvePaymentChannel(provider, navigator.userAgent);
       const paymentResponse = await fetch(`/api/orders/${order.orderNo}/pay`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, channel }) });
       const payment = await paymentResponse.json();
       if (!paymentResponse.ok) throw new Error(payment.error ?? "发起支付失败");
       clear();
-      if (payment.kind === "redirect") window.location.assign(payment.url);
+      if (payment.kind === "redirect" || payment.kind === "oauth") window.location.assign(payment.url);
       else if (payment.kind === "jsapi") {
         const bridge = (window as unknown as { WeixinJSBridge?: { invoke: (name: string, params: unknown, callback: () => void) => void } }).WeixinJSBridge;
         if (!bridge) throw new Error("请在微信内打开并完成公众号授权");

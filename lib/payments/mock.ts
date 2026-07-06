@@ -8,7 +8,10 @@ export const mockGateway: PaymentGateway = {
     return {
       merchantTradeNo: String(payload.merchantTradeNo),
       providerTradeNo: `mock_${Date.now()}`,
+      amountFen: Number(payload.amountFen ?? 0),
       success: true,
     };
   },
+  async close() {},
+  async refund(_attempt, input) { return { status: "succeeded", providerRefundNo: `mock_${input.refundNo}` }; },
 };

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { makeOrderNo } from "@/lib/money";
 import type { z } from "zod";
 import type { createOrderSchema } from "@/lib/validation";
+import { getGateway } from "@/lib/payments";
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
@@ -74,6 +75,12 @@ export async function createPaymentAttempt(orderNo: string, provider: PaymentPro
   if (order.status !== OrderStatus.PENDING_PAYMENT || order.expiresAt <= new Date()) {
     throw new StoreError("ORDER_NOT_PAYABLE", "订单已支付或已过期", 409);
   }
+  const existing = await prisma.paymentAttempt.findFirst({
+    where: { orderId: order.id, provider, channel, status: PaymentStatus.PENDING },
+    orderBy: { createdAt: "desc" },
+    include: { order: true },
+  });
+  if (existing) return existing;
   return prisma.paymentAttempt.create({
     data: {
       orderId: order.id,
@@ -87,14 +94,15 @@ export async function createPaymentAttempt(orderNo: string, provider: PaymentPro
   });
 }
 
-export async function completePayment(merchantTradeNo: string, providerTradeNo: string) {
+export async function completePayment(merchantTradeNo: string, providerTradeNo: string, amountFen?: number) {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.paymentAttempt.findUnique({
       where: { merchantTradeNo },
       include: { order: { include: { items: true } } },
     });
     if (!payment) throw new StoreError("PAYMENT_NOT_FOUND", "支付记录不存在", 404);
-    if (payment.status === PaymentStatus.SUCCEEDED) return payment.order;
+    if (payment.status === PaymentStatus.SUCCEEDED || payment.status === PaymentStatus.REFUNDING || payment.status === PaymentStatus.REFUNDED) return payment.order;
+    if (amountFen !== undefined && amountFen !== payment.amountFen) throw new StoreError("PAYMENT_AMOUNT_MISMATCH", "支付金额不匹配", 409);
     if (payment.order.status !== OrderStatus.PENDING_PAYMENT) throw new StoreError("ORDER_NOT_PAYABLE", "订单状态不可支付", 409);
 
     for (const item of payment.order.items) {
@@ -115,10 +123,16 @@ export async function completePayment(merchantTradeNo: string, providerTradeNo: 
 export async function expireOrders() {
   const orders = await prisma.order.findMany({
     where: { status: OrderStatus.PENDING_PAYMENT, expiresAt: { lte: new Date() } },
-    include: { items: true },
+    include: { items: true, payments: { where: { status: PaymentStatus.PENDING } } },
     take: 100,
   });
+  let released = 0;
   for (const order of orders) {
+    try {
+      for (const payment of order.payments) await getGateway(payment.provider).close({ ...payment, order });
+    } catch {
+      continue;
+    }
     await prisma.$transaction(async (tx) => {
       const changed = await tx.order.updateMany({
         where: { id: order.id, status: OrderStatus.PENDING_PAYMENT },
@@ -130,6 +144,32 @@ export async function expireOrders() {
       }
       await tx.paymentAttempt.updateMany({ where: { orderId: order.id, status: PaymentStatus.PENDING }, data: { status: PaymentStatus.CLOSED } });
     });
+    released += 1;
   }
-  return orders.length;
+  return released;
+}
+
+export async function completeRefund(refundNo: string, providerRefundNo: string) {
+  return prisma.$transaction(async (tx) => {
+    const refund = await tx.refund.findUnique({ where: { refundNo }, include: { order: { include: { items: true } } } });
+    if (!refund) throw new StoreError("REFUND_NOT_FOUND", "退款记录不存在", 404);
+    if (refund.status === PaymentStatus.REFUNDED) return refund.order;
+    if (refund.status !== PaymentStatus.REFUNDING) throw new StoreError("REFUND_NOT_PENDING", "退款状态不可更新", 409);
+    for (const item of refund.order.items) {
+      await tx.productVariant.update({ where: { id: item.variantId }, data: { stockOnHand: { increment: item.quantity } } });
+    }
+    await tx.refund.update({ where: { id: refund.id }, data: { status: PaymentStatus.REFUNDED, providerRefundNo } });
+    await tx.paymentAttempt.updateMany({ where: { orderId: refund.orderId, status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.REFUNDING] } }, data: { status: PaymentStatus.REFUNDED } });
+    return tx.order.update({ where: { id: refund.orderId }, data: { status: OrderStatus.REFUNDED } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function failRefund(refundNo: string) {
+  return prisma.$transaction(async (tx) => {
+    const refund = await tx.refund.findUnique({ where: { refundNo } });
+    if (!refund || refund.status !== PaymentStatus.REFUNDING) return;
+    await tx.refund.update({ where: { id: refund.id }, data: { status: PaymentStatus.FAILED } });
+    await tx.order.update({ where: { id: refund.orderId }, data: { status: OrderStatus.PAID } });
+    await tx.paymentAttempt.updateMany({ where: { orderId: refund.orderId, status: PaymentStatus.REFUNDING }, data: { status: PaymentStatus.SUCCEEDED } });
+  });
 }

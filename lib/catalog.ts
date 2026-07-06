@@ -12,3 +12,12 @@ export const featuredProduct = {
 } as const;
 
 export type CatalogVariant = (typeof featuredProduct.variants)[number];
+
+export type StorefrontProduct = {
+  slug: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  image: string;
+  variants: { id: string; sku: string; name: string; priceFen: number; hint: string }[];
+};

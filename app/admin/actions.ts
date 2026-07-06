@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { makeOrderNo } from "@/lib/money";
+import { getGateway } from "@/lib/payments";
+import { completeRefund } from "@/lib/order-service";
+import { canRefund, canShip } from "@/lib/order-policy";
 
 async function audit(action: string, target: string, detail?: Record<string, unknown>) {
   const admin = await requireAdmin();
@@ -19,6 +22,17 @@ export async function updateVariant(formData: FormData) {
   await requireAdmin();
   await prisma.productVariant.update({ where: { id }, data: { priceFen, stockOnHand } });
   await audit("variant.update", id, { priceFen, stockOnHand }); revalidatePath("/admin"); revalidatePath("/");
+}
+
+export async function updateProduct(formData: FormData) {
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  const subtitle = String(formData.get("subtitle") ?? "").trim();
+  const active = formData.get("active") === "on";
+  if (!name) throw new Error("商品名称不能为空");
+  await requireAdmin();
+  await prisma.product.update({ where: { id }, data: { name, subtitle, active } });
+  await audit("product.update", id, { name, subtitle, active }); revalidatePath("/admin"); revalidatePath("/");
 }
 
 export async function updateZone(formData: FormData) {
@@ -36,6 +50,8 @@ export async function shipOrder(formData: FormData) {
   const trackingNo = String(formData.get("trackingNo") ?? "").trim();
   if (!carrier || !trackingNo) throw new Error("请填写承运商和运单号");
   await requireAdmin();
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+  if (!order || !canShip(order.status)) throw new Error("当前订单不可发货");
   await prisma.$transaction([
     prisma.shipment.upsert({ where: { orderId }, update: { carrier, trackingNo, shippedAt: new Date() }, create: { orderId, carrier, trackingNo } }),
     prisma.order.update({ where: { id: orderId }, data: { status: OrderStatus.SHIPPED } }),
@@ -48,16 +64,26 @@ export async function refundOrder(formData: FormData) {
   const reason = String(formData.get("reason") || "管理员整单退款");
   await requireAdmin();
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, payments: { where: { status: PaymentStatus.SUCCEEDED }, take: 1 } } });
-  if (!order || (order.status !== OrderStatus.PAID && order.status !== OrderStatus.FULFILLING)) throw new Error("当前订单不可退款");
+  if (!order || !canRefund(order.status)) throw new Error("当前订单不可退款");
   const payment = order.payments[0];
   if (!payment) throw new Error("找不到成功支付记录");
-  if (payment.provider !== "MOCK") throw new Error("真实渠道退款需配置商户证书后通过支付平台执行；系统未伪造成功状态");
   const refundNo = makeOrderNo("RF");
-  await prisma.$transaction(async (tx) => {
-    await tx.refund.create({ data: { orderId, refundNo, amountFen: order.totalFen, reason, status: PaymentStatus.REFUNDED, providerRefundNo: `mock_${refundNo}` } });
-    await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.REFUNDED } });
-    await tx.paymentAttempt.update({ where: { id: payment.id }, data: { status: PaymentStatus.REFUNDED } });
-    for (const item of order.items) await tx.productVariant.update({ where: { id: item.variantId }, data: { stockOnHand: { increment: item.quantity } } });
-  });
+  await prisma.$transaction([
+    prisma.refund.create({ data: { orderId, refundNo, amountFen: order.totalFen, reason, status: PaymentStatus.REFUNDING } }),
+    prisma.order.update({ where: { id: orderId }, data: { status: OrderStatus.REFUNDING } }),
+    prisma.paymentAttempt.update({ where: { id: payment.id }, data: { status: PaymentStatus.REFUNDING } }),
+  ]);
+  try {
+    const result = await getGateway(payment.provider).refund({ ...payment, order }, { refundNo, amountFen: order.totalFen, reason });
+    if (result.status === "succeeded") await completeRefund(refundNo, result.providerRefundNo ?? refundNo);
+    else if (result.providerRefundNo) await prisma.refund.update({ where: { refundNo }, data: { providerRefundNo: result.providerRefundNo } });
+  } catch (cause) {
+    await prisma.$transaction([
+      prisma.refund.update({ where: { refundNo }, data: { status: PaymentStatus.FAILED } }),
+      prisma.order.update({ where: { id: orderId }, data: { status: order.status } }),
+      prisma.paymentAttempt.update({ where: { id: payment.id }, data: { status: PaymentStatus.SUCCEEDED } }),
+    ]);
+    throw cause;
+  }
   await audit("order.refund", orderId, { reason, refundNo }); revalidatePath("/admin");
 }

@@ -31,10 +31,11 @@ async function wechatRequest<T>(path: string, body: unknown): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) throw new Error(`微信支付请求失败：${response.status} ${await response.text()}`);
+  if (response.status === 204) return {} as T;
   return response.json() as Promise<T>;
 }
 
-async function createPayment(attempt: PaymentWithOrder, openId?: string): Promise<PaymentResult> {
+async function createPayment(attempt: PaymentWithOrder, openId?: string, clientIp?: string): Promise<PaymentResult> {
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const channel = attempt.channel;
   const path = `/v3/pay/transactions/${channel}`;
@@ -58,7 +59,7 @@ async function createPayment(attempt: PaymentWithOrder, openId?: string): Promis
   if (channel === "h5") {
     const result = await wechatRequest<{ h5_url: string }>(path, {
       ...common,
-      scene_info: { payer_client_ip: "127.0.0.1", h5_info: { type: "Wap", app_name: "山野蜜境", app_url: appUrl } },
+      scene_info: { payer_client_ip: clientIp ?? "127.0.0.1", h5_info: { type: "Wap", app_name: "山野蜜境", app_url: appUrl } },
     });
     return { kind: "redirect", url: result.h5_url };
   }
@@ -75,21 +76,55 @@ function decryptResource(resource: Record<string, string>) {
 }
 
 export const wechatGateway: PaymentGateway = {
-  create: (attempt, options) => createPayment(attempt, options?.openId),
+  create: (attempt, options) => createPayment(attempt, options?.openId, options?.clientIp),
   async verifyNotification(payload, headers) {
     const raw = payload.__raw ?? JSON.stringify(payload);
     const timestamp = headers?.get("Wechatpay-Timestamp") ?? "";
     const nonceStr = headers?.get("Wechatpay-Nonce") ?? "";
     const signature = headers?.get("Wechatpay-Signature") ?? "";
+    const serial = headers?.get("Wechatpay-Serial") ?? "";
+    if (process.env.WECHAT_PLATFORM_SERIAL_NO && serial !== process.env.WECHAT_PLATFORM_SERIAL_NO) throw new Error("微信支付平台证书序列号不匹配");
     const verifier = createVerify("RSA-SHA256");
     verifier.update(`${timestamp}\n${nonceStr}\n${raw}\n`);
     if (!verifier.verify(env("WECHAT_PLATFORM_CERT"), signature, "base64")) throw new Error("微信支付回调验签失败");
     const parsed = JSON.parse(raw) as { resource: Record<string, string> };
     const transaction = decryptResource(parsed.resource);
+    if (transaction.appid !== env("WECHAT_APP_ID") || transaction.mchid !== env("WECHAT_MCH_ID")) throw new Error("微信支付回调商户不匹配");
     return {
       merchantTradeNo: String(transaction.out_trade_no),
       providerTradeNo: String(transaction.transaction_id),
+      amountFen: Number((transaction.amount as { total?: number } | undefined)?.total ?? 0),
       success: transaction.trade_state === "SUCCESS",
     };
   },
+  async close(attempt) {
+    await wechatRequest(`/v3/pay/transactions/out-trade-no/${encodeURIComponent(attempt.merchantTradeNo)}/close`, { mchid: env("WECHAT_MCH_ID") });
+  },
+  async refund(attempt, input) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const result = await wechatRequest<{ refund_id: string; status: string }>("/v3/refund/domestic/refunds", {
+      out_trade_no: attempt.merchantTradeNo,
+      out_refund_no: input.refundNo,
+      reason: input.reason,
+      notify_url: `${appUrl}/api/payments/wechat/refund-notify`,
+      amount: { refund: input.amountFen, total: attempt.amountFen, currency: "CNY" },
+    });
+    return { status: result.status === "SUCCESS" ? "succeeded" : "pending", providerRefundNo: result.refund_id };
+  },
 };
+
+export function verifyWechatRefundNotification(payload: Record<string, string>, headers: Headers) {
+  const raw = payload.__raw ?? JSON.stringify(payload);
+  const timestamp = headers.get("Wechatpay-Timestamp") ?? "";
+  const nonceStr = headers.get("Wechatpay-Nonce") ?? "";
+  const signature = headers.get("Wechatpay-Signature") ?? "";
+  const serial = headers.get("Wechatpay-Serial") ?? "";
+  if (process.env.WECHAT_PLATFORM_SERIAL_NO && serial !== process.env.WECHAT_PLATFORM_SERIAL_NO) throw new Error("微信支付平台证书序列号不匹配");
+  const verifier = createVerify("RSA-SHA256");
+  verifier.update(`${timestamp}\n${nonceStr}\n${raw}\n`);
+  if (!verifier.verify(env("WECHAT_PLATFORM_CERT"), signature, "base64")) throw new Error("微信退款回调验签失败");
+  const parsed = JSON.parse(raw) as { resource: Record<string, string> };
+  const refund = decryptResource(parsed.resource);
+  if (refund.mchid && refund.mchid !== env("WECHAT_MCH_ID")) throw new Error("微信退款回调商户不匹配");
+  return { refundNo: String(refund.out_refund_no), providerRefundNo: String(refund.refund_id), success: refund.refund_status === "SUCCESS" };
+}

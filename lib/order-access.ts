@@ -11,7 +11,7 @@ function cookieName(orderNo: string) { return `order_${orderNo}`; }
 
 export async function issueOrderAccess(orderNo: string, phone: string) {
   const token = await new SignJWT({ orderNo, phone }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("30d").sign(secret());
-  (await cookies()).set(cookieName(orderNo), token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: `/orders/${orderNo}`, maxAge: 30 * 86400 });
+  (await cookies()).set(cookieName(orderNo), token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 30 * 86400 });
 }
 
 export async function canAccessOrder(orderNo: string) {

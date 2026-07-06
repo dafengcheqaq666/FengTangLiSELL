@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: store
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U store -d store"]
       interval: 5s
@@ -21,8 +23,31 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://store:store@postgres:5432/store?schema=public
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  migrate:
+    build:
+      context: .
+      target: migrator
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://store:store@postgres:5432/store?schema=public
     depends_on:
       postgres:
+        condition: service_healthy
+  scheduler:
+    image: curlimages/curl:8.16.0
+    restart: unless-stopped
+    env_file: .env
+    command: ["sh", "-c", "while true; do sleep 60; curl --fail --silent --show-error -X POST -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/internal/jobs/expire-orders || true; done"]
+    depends_on:
+      app:
         condition: service_healthy
 
 volumes:
