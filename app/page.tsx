@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { SiteHeader, Brand } from "@/components/site-header";
+import { DailyNews } from "@/components/daily-news";
 import { ProductSelector } from "@/components/product-selector";
 import { RevealObserver } from "@/components/reveal";
 import { loadFeaturedProduct } from "@/lib/storefront";
@@ -18,6 +19,7 @@ export default async function HomePage() {
         <div className="harvest-tag"><div><strong>24h</strong>采后快速发出</div></div>
       </section>
       <div className="ticker" aria-hidden="true"><div className="ticker-track">{[...Array(2)].flatMap((_, i) => ["树上熟 · 自然甜", "现摘现发 · 坏果包赔", "脆甜多汁 · 细嫩离核", "仁寿吴家祠 · 当季限定"].map((text) => <span className="ticker-item" key={`${i}-${text}`}>{text}</span>))}</div></div>
+      <DailyNews />
       <section className="features" id="taste"><div className="container"><div className="section-head reveal"><div><div className="section-kicker">WHY FENGTANG PLUM</div><h2>好李子，甜得有层次</h2></div><p className="section-intro">不是单调的糖甜。先是清脆果香，随后蜜意渐浓，最后留下一点恰到好处的微酸，越吃越清爽。</p></div><div className="feature-grid">
         <article className="feature-card reveal"><span className="feature-number">01</span><div className="feature-icon">◒</div><h3>薄皮 · 一咬即破</h3><p>果皮细薄，轻轻一咬便迸出丰沛汁水，入口不涩，清新果香自然散开。</p></article>
         <article className="feature-card reveal"><span className="feature-number">02</span><div className="feature-icon">✦</div><h3>蜜甜 · 清润不腻</h3><p>成熟果甜度充足，甜里带着淡淡果酸，像山泉兑进一勺蜂蜜，耐吃又解暑。</p></article>
