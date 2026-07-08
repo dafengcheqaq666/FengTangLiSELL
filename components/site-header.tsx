@@ -17,6 +17,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
           <Link href="/#taste">风味</Link><Link href="/#origin">产地</Link><Link href="/#fresh">鲜达</Link>
           <Link className="nav-buy" href="/cart">鲜果篮{count ? ` · ${count}` : ""}</Link>
         </div>
+        <Link className="nav-mobile-buy" href="/cart">鲜果篮{count ? ` · ${count}` : ""}</Link>
       </nav>
     </header>
   );
