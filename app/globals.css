@@ -18,6 +18,7 @@
   --danger: #a43b31;
   --radius-lg: 8px;
   --radius-md: 8px;
+  --font-cartoon: "Comic Sans MS", "Comic Neue", "Chalkboard SE", "Marker Felt", "Hannotate SC", "ZCOOL KuaiLe", "YouYuan", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", cursive, sans-serif;
 }
 
 * {
@@ -33,7 +34,7 @@ body {
   color: var(--ink);
   background:
     linear-gradient(180deg, #f9fbf5 0%, #eef7f1 42%, #f8faf3 100%);
-  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--font-cartoon);
   letter-spacing: 0;
   overflow-x: hidden;
 }
@@ -263,8 +264,8 @@ img {
 
 h1,
 h2 {
-  font-family: "STSong", "SimSun", "Songti SC", serif;
-  letter-spacing: 0;
+  font-family: var(--font-cartoon);
+  letter-spacing: .01em;
 }
 
 h1 {
@@ -278,7 +279,7 @@ h1 {
   display: block;
   margin-top: 18px;
   color: var(--bamboo-dark);
-  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--font-cartoon);
   font-size: clamp(20px, 2.1vw, 30px);
   font-weight: 500;
   letter-spacing: .12em;
@@ -330,7 +331,7 @@ h1 {
 
 .price-note strong {
   color: var(--bamboo-dark);
-  font-family: Georgia, serif;
+  font-family: var(--font-cartoon);
   font-size: 25px;
 }
 
@@ -357,7 +358,7 @@ h1 {
 .harvest-tag strong {
   display: block;
   color: var(--bamboo);
-  font-family: Georgia, serif;
+  font-family: var(--font-cartoon);
   font-size: 30px;
 }
 
@@ -482,7 +483,7 @@ h2 {
 
 .feature-number {
   color: var(--bamboo);
-  font: 13px Georgia, serif;
+  font: 800 13px/1 var(--font-cartoon);
 }
 
 .feature-icon {
@@ -500,7 +501,7 @@ h2 {
 
 .feature-card h3 {
   margin: 0 0 12px;
-  font-family: "STSong", "SimSun", serif;
+  font-family: var(--font-cartoon);
   font-size: 25px;
   font-weight: 700;
 }
@@ -601,7 +602,7 @@ h2 {
   display: block;
   margin-bottom: 9px;
   color: var(--bamboo);
-  font: 32px/1 Georgia, serif;
+  font: 800 32px/1 var(--font-cartoon);
 }
 
 .data-item span {
@@ -694,7 +695,7 @@ h2 {
 
 .price strong {
   color: var(--bamboo-dark);
-  font: 48px/1 Georgia, serif;
+  font: 800 48px/1 var(--font-cartoon);
 }
 
 .price small,
@@ -867,12 +868,12 @@ h2 {
   display: grid;
   place-items: center;
   color: var(--sprout);
-  font: 20px Georgia, serif;
+  font: 800 20px/1 var(--font-cartoon);
 }
 
 .step h3 {
   margin: 0 0 10px;
-  font-family: "STSong", "SimSun", serif;
+  font-family: var(--font-cartoon);
   font-size: 21px;
 }
 
@@ -893,13 +894,13 @@ h2 {
 .quote-mark {
   height: 50px;
   color: var(--citrus);
-  font: 80px/1 Georgia, serif;
+  font: 800 80px/1 var(--font-cartoon);
 }
 
 blockquote {
   max-width: 800px;
   margin: 18px auto 0;
-  font: clamp(26px, 4vw, 42px)/1.55 "STSong", "SimSun", serif;
+  font: 800 clamp(26px, 4vw, 42px)/1.55 var(--font-cartoon);
 }
 
 .taste-tags {
