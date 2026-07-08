@@ -14,7 +14,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
       <nav className="nav container" aria-label="主导航">
         <Brand />
         <div className="nav-links">
-          <Link href="/#taste">风味</Link><Link href="/#origin">产地</Link><Link href="/#fresh">鲜达</Link>
+          <Link href="/#news">每日新闻</Link><Link href="/#taste">风味</Link><Link href="/#origin">产地</Link><Link href="/#fresh">鲜达</Link>
           <Link className="nav-buy" href="/cart">鲜果篮{count ? ` · ${count}` : ""}</Link>
         </div>
         <Link className="nav-mobile-buy" href="/cart">鲜果篮{count ? ` · ${count}` : ""}</Link>
