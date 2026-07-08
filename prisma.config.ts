@@ -1,9 +1,10 @@
 import { defineConfig } from "prisma/config";
+import { ensureDatabaseUrl } from "./lib/database-url";
 
-process.env.DATABASE_URL ??= "postgresql://store:store@localhost:5432/store?schema=public";
+const databaseUrl = ensureDatabaseUrl();
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations", seed: "tsx prisma/seed.ts" },
-  datasource: { url: process.env.DATABASE_URL },
+  datasource: { url: databaseUrl },
 });

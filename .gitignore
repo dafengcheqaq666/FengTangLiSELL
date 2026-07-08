@@ -30,6 +30,8 @@ pnpm-debug.log*
 /prisma/*.db-journal
 
 # Deployment and editor metadata
+/.netlify/
+/.netlify-deploy-staging/
 /.vercel/
 /.idea/
 /.vscode/
