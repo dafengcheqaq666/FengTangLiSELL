@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(process.env.NETLIFY === "true" ? {} : { output: "standalone" as const }),
   poweredByHeader: false,
   experimental: { optimizePackageImports: ["qrcode"] },
 };
